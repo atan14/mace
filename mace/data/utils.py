@@ -116,7 +116,7 @@ def config_from_atoms(
 
     energy = atoms.info.get(energy_key, None)  # eV
     forces = atoms.arrays.get(forces_key, None)  # eV / Ang
-    stress = atoms.info.get(stress_key, None)  # eV / Ang
+    stress = atoms.info.get(stress_key, None)  # eV / Ang ^ 3
     virials = atoms.info.get(virials_key, None)
     dipole = atoms.info.get(dipole_key, None)  # Debye
     # Charges default to 0 instead of None if not found
@@ -148,6 +148,9 @@ def config_from_atoms(
     if virials is None:
         virials = np.zeros((3, 3))
         virials_weight = 0.0
+    if dipole is None:
+        dipole = np.zeros(3)
+        # dipoles_weight = 0.0
 
     return Configuration(
         atomic_numbers=atomic_numbers,
@@ -195,8 +198,30 @@ def load_from_xyz(
     dipole_key: str = "dipole",
     charges_key: str = "charges",
     extract_atomic_energies: bool = False,
+    keep_isolated_atoms: bool = False,
 ) -> Tuple[Dict[int, float], Configurations]:
     atoms_list = ase.io.read(file_path, index=":")
+
+    if energy_key == "energy":
+        for atoms in atoms_list:
+            try:
+                atoms.info[energy_key] = atoms.get_potential_energy()
+            except Exception as e:  # pylint: disable=W0703
+                logging.warning(f"Failed to extract energy: {e}")
+                atoms.info[energy_key] = None
+    if forces_key == "forces":
+        for atoms in atoms_list:
+            try:
+                atoms.arrays[forces_key] = atoms.get_forces()
+            except Exception as e:  # pylint: disable=W0703
+                logging.warning(f"Failed to extract forces: {e}")
+                atoms.arrays[forces_key] = None
+    if stress_key == "stress":
+        for atoms in atoms_list:
+            try:
+                atoms.info[stress_key] = atoms.get_stress()
+            except Exception:  # pylint: disable=W0703
+                atoms.info[stress_key] = None
 
     if not isinstance(atoms_list, list):
         atoms_list = [atoms_list]
@@ -216,15 +241,18 @@ def load_from_xyz(
                     else:
                         logging.warning(
                             f"Configuration '{idx}' is marked as 'IsolatedAtom' "
-                            "but does not contain an energy."
+                            "but does not contain an energy. Zero energy will be used."
+                        )
+                        atomic_energies_dict[atoms.get_atomic_numbers()[0]] = np.zeros(
+                            1
                         )
             else:
                 atoms_without_iso_atoms.append(atoms)
 
         if len(atomic_energies_dict) > 0:
             logging.info("Using isolated atom energies from training file")
-
-        atoms_list = atoms_without_iso_atoms
+        if not keep_isolated_atoms:
+            atoms_list = atoms_without_iso_atoms
 
     configs = config_from_atoms_list(
         atoms_list,
