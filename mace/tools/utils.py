@@ -43,7 +43,9 @@ def compute_c(delta: np.ndarray, eta: float) -> float:
 
 
 def get_tag(name: str, seed: int) -> str:
-    return f"{name}_run-{seed}"
+    # return f"{name}_run-{seed}"
+    # NOTE: atan (ME) changed this
+    return name
 
 
 def setup_logger(
