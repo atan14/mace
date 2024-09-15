@@ -263,7 +263,7 @@ class MACE(torch.nn.Module):
         node_energy = torch.sum(node_energy_contributions, dim=-1)  # [n_nodes, ]
 
         # Outputs
-        forces, virials, stress, hessian = get_outputs(
+        forces, virials, stress, hessian, positions = get_outputs(
             energy=total_energy,
             positions=data["positions"],
             displacement=displacement,
@@ -285,6 +285,7 @@ class MACE(torch.nn.Module):
             "displacement": displacement,
             "hessian": hessian,
             "node_feats": node_feats_out,
+            "xyz": positions,
         }
 
 
@@ -392,7 +393,7 @@ class ScaleShiftMACE(MACE):
         # Add E_0 and (scaled) interaction energy
         total_energy = e0 + inter_e
         node_energy = node_e0 + node_inter_es
-        forces, virials, stress, hessian = get_outputs(
+        forces, virials, stress, hessian, positions = get_outputs(
             energy=inter_e,
             positions=data["positions"],
             displacement=displacement,
@@ -413,6 +414,7 @@ class ScaleShiftMACE(MACE):
             "hessian": hessian,
             "displacement": displacement,
             "node_feats": node_feats_out,
+            "xyz": positions,
         }
 
         return output
@@ -1040,7 +1042,7 @@ class EnergyDipolesMACE(torch.nn.Module):
         )  # [n_graphs,3]
         total_dipole = total_dipole + baseline
 
-        forces, virials, stress, _ = get_outputs(
+        forces, virials, stress, _, positions = get_outputs(
             energy=total_energy,
             positions=data["positions"],
             displacement=displacement,
@@ -1061,5 +1063,6 @@ class EnergyDipolesMACE(torch.nn.Module):
             "displacement": displacement,
             "dipole": total_dipole,
             "atomic_dipoles": atomic_dipoles,
+            "xyz": positions,
         }
         return output

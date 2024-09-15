@@ -35,8 +35,8 @@ def compute_forces(
         0
     ]  # [n_nodes, 3]
     if gradient is None:
-        return torch.zeros_like(positions)
-    return -1 * gradient
+        return torch.zeros_like(positions), positions
+    return -1 * gradient, positions
 
 
 def compute_forces_virials(
@@ -67,7 +67,7 @@ def compute_forces_virials(
     if virials is None:
         virials = torch.zeros((1, 3, 3))
 
-    return -1 * forces, -1 * virials, stress
+    return -1 * forces, -1 * virials, stress, positions
 
 
 def get_symmetric_displacement(
@@ -182,7 +182,7 @@ def get_outputs(
 ]:
     if (compute_virials or compute_stress) and displacement is not None:
         # forces come for free
-        forces, virials, stress = compute_forces_virials(
+        forces, virials, stress, positions = compute_forces_virials(
             energy=energy,
             positions=positions,
             displacement=displacement,
@@ -191,15 +191,12 @@ def get_outputs(
             training=(training or compute_hessian),
         )
     elif compute_force:
-        forces, virials, stress = (
-            compute_forces(
-                energy=energy,
-                positions=positions,
-                training=(training or compute_hessian),
-            ),
-            None,
-            None,
+        forces, positions = compute_forces(
+            energy=energy,
+            positions=positions,
+            training=(training or compute_hessian),
         )
+        virials, stress = (None, None)
     else:
         forces, virials, stress = (None, None, None)
     if compute_hessian:
@@ -207,7 +204,7 @@ def get_outputs(
         hessian = compute_hessians_vmap(forces, positions)
     else:
         hessian = None
-    return forces, virials, stress, hessian
+    return forces, virials, stress, hessian, positions
 
 
 def get_edge_vectors_and_lengths(
@@ -251,6 +248,26 @@ def extract_invariant(x: torch.Tensor, num_layers: int, num_features: int, l_max
         )
     out.append(x[:, -num_features:])
     return torch.cat(out, dim=-1)
+
+
+def extract_equivariant(
+    x: torch.Tensor, num_layers: int, num_features: int, l_max: int
+):
+    inv_inds = []
+    for i in range(num_layers - 1):
+        start, end = (
+            i * (l_max + 1) ** 2 * num_features,
+            (i * (l_max + 1) ** 2 + 1) * num_features,
+        )
+        for j in range(start, end):
+            inv_inds.append(j)
+
+    for j in range(x.shape[1] - num_features, x.shape[1]):
+        inv_inds.append(j)
+
+    out = [x[:, i] for i in range(x.shape[1]) if i not in inv_inds]
+
+    return torch.stack(out, dim=-1)
 
 
 def compute_mean_std_atomic_inter_energy(

@@ -10,6 +10,7 @@ from typing import Optional
 
 
 def build_default_arg_parser() -> argparse.ArgumentParser:
+    print("HERE")
     try:
         import configargparse
 
